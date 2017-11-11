@@ -155,7 +155,7 @@ class Canvas(app.Canvas):
         self.shader_nodes['u_view'] = self.view
         self.shader_nodes['u_size'] = 5 / self.translate
         self.shader_traces['u_view'] = self.view
-        self.shader_traces['u_size'] = 5 / self.translate
+        #self.shader_traces['u_size'] = 5 / self.translate
         self.update()
 
     def on_draw(self, event):
