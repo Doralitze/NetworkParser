@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from vispy import gloo
 from vispy import app
+from vispy import io
 from vispy.util.transforms import perspective, translate, rotate
 import csv
 import argparse
@@ -68,17 +69,21 @@ class Node(object):
 
 class Canvas(app.Canvas):
 
+    shader_nodes: gloo.Program
+    shader_traces: gloo.Program
+
     def __init__(self):
         app.Canvas.__init__(self, keys='interactive', size=(800, 600))
         ps = self.pixel_scale
 
         # Create vertices
         n = len(nodes)
+        b_lengh, trace_data = compute_connections()
         data = numpy.zeros(n, [('a_position', numpy.float32, 3),
                             ('a_bg_color', numpy.float32, 4),
                             ('a_fg_color', numpy.float32, 4),
                             ('a_size', numpy.float32, 1)])
-        # data['a_position'] = 0.45 * numpy.random.randn(n, 3)
+
         for i in range(0, len(nodes)):
             na: Node = nodes[i]
             data["a_position"][i] = na.position
@@ -94,7 +99,8 @@ class Canvas(app.Canvas):
         u_antialias = 1.0
 
         self.translate = 5
-        self.program = gloo.Program(vert, frag)
+        self.shader_nodes = gloo.Program(vert_nodes, frag_nodes)
+        self.program = self.shader_nodes
         self.view = translate((0, 0, -self.translate))
         self.model = numpy.eye(4, dtype=numpy.float32)
         self.projection = numpy.eye(4, dtype=numpy.float32)
@@ -102,6 +108,7 @@ class Canvas(app.Canvas):
         self.apply_zoom()
 
         self.program.bind(gloo.VertexBuffer(data))
+        self.program.bind(gloo.VertexBuffer(trace_data))
         self.program['u_linewidth'] = u_linewidth
         self.program['u_antialias'] = u_antialias
         self.program['u_render_selection'] = float(args.rendermethod)
@@ -147,7 +154,10 @@ class Canvas(app.Canvas):
 
     def on_draw(self, event):
         gloo.clear()
+        self.program = self.shader_nodes
         self.program.draw('points')
+        #self.program = self.shader_traces
+        #self.program.draw('points')
 
     def apply_zoom(self):
         gloo.set_viewport(0, 0, self.physical_size[0], self.physical_size[1])
@@ -156,7 +166,7 @@ class Canvas(app.Canvas):
         self.program['u_projection'] = self.projection
 
 # define required shaders
-vert = """
+vert_nodes = """
 #version 120
 // Uniforms
 // ------------------------------------
@@ -169,7 +179,7 @@ uniform float u_render_selection;
 uniform float u_size;
 // Attributes
 // ------------------------------------
-attribute vec3  a_position;
+attribute vec3  a_position; //Position of each node
 attribute vec4  a_fg_color;
 attribute vec4  a_bg_color;
 attribute float a_size;
@@ -193,7 +203,7 @@ void main (void) {
 }
 """
 
-frag = """
+frag_nodes = """
 #version 120
 // Constants
 // ------------------------------------
@@ -393,6 +403,33 @@ def check_network_integrity(start: int, stop: int):
                     print("Check your file.")
                 exit(1)
     return True
+
+
+def compute_connections():
+    c = []
+    def is_present(con):
+        for k in c:
+            if ((k[0] == con[0] and k[1] == con[1]) or
+                (k[0] == con[1] and k[1] == con[0])):
+                return True
+
+    for n in nodes:
+        for t in n.connections:
+            a = find_node(t)
+            if not is_present((n,a)):
+                c.append((n,a))
+    trace_data = numpy.zeros(len(c), [('a_tracesa', numpy.float32, 3),
+                                      ('a_tracesb', numpy.float32, 3)])
+    for i in range(0, len(c)):
+        if args.verbosity > 2:
+            print("adding connection [" + str(i) + "]: " + str(c[i]))
+        trace_data['a_tracesb'][0] = c[i][1].position[0]
+        trace_data['a_tracesb'][1] = c[i][1].position[1]
+        trace_data['a_tracesb'][2] = c[i][1].position[2]
+        trace_data['a_tracesa'][0] = c[i][0].position[0]
+        trace_data['a_tracesa'][1] = c[i][0].position[1]
+        trace_data['a_tracesa'][2] = c[i][0].position[2]
+    return len(c), trace_data
 
 
 # declaring global variables
