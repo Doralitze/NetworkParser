@@ -104,6 +104,7 @@ class Canvas(app.Canvas):
         self.program.bind(gloo.VertexBuffer(data))
         self.program['u_linewidth'] = u_linewidth
         self.program['u_antialias'] = u_antialias
+        self.program['u_render_selection'] = float(args.rendermethod)
         self.program['u_model'] = self.model
         self.program['u_view'] = self.view
         self.program['u_size'] = 5 / self.translate
@@ -164,6 +165,7 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform float u_linewidth;
 uniform float u_antialias;
+uniform float u_render_selection;
 uniform float u_size;
 // Attributes
 // ------------------------------------
@@ -178,10 +180,12 @@ varying vec4 v_bg_color;
 varying float v_size;
 varying float v_linewidth;
 varying float v_antialias;
+varying float v_render_selection;
 void main (void) {
     v_size = a_size * u_size;
     v_linewidth = u_linewidth;
     v_antialias = u_antialias;
+    v_render_selection = u_render_selection;
     v_fg_color  = a_fg_color;
     v_bg_color  = a_bg_color;
     gl_Position = u_projection * u_view * u_model * vec4(a_position,1.0);
@@ -200,6 +204,8 @@ varying vec4 v_bg_color;
 varying float v_size;
 varying float v_linewidth;
 varying float v_antialias;
+varying float v_render_selection;
+
 // Functions
 // ------------------------------------
 // ----------------
@@ -300,15 +306,29 @@ void main()
 {
     float size = v_size +2*(v_linewidth + 1.5*v_antialias);
     float t = v_linewidth/2.0-v_antialias;
-    float r = disc(gl_PointCoord, size);
-    // float r = square(gl_PointCoord, size);
-    // float r = ring(gl_PointCoord, size);
-    // float r = arrow_right(gl_PointCoord, size);
-    // float r = diamond(gl_PointCoord, size);
-    // float r = cross(gl_PointCoord, size);
-    // float r = clober(gl_PointCoord, size);
-    // float r = hbar(gl_PointCoord, size);
-    // float r = vbar(gl_PointCoord, size);
+    float r;
+
+    if(v_render_selection == 0.0f)
+        r = disc(gl_PointCoord, size);
+    else if(v_render_selection == 1.0f)
+        r = square(gl_PointCoord, size);
+    else if(v_render_selection == 2.0f)
+        r = ring(gl_PointCoord, size);
+    else if(v_render_selection == 3.0f)
+        r = arrow_right(gl_PointCoord, size);
+    else if(v_render_selection == 4.0f)
+        r = diamond(gl_PointCoord, size);
+    else if(v_render_selection == 5.0f)
+        r = cross(gl_PointCoord, size);
+    else if(v_render_selection == 6.0f)
+        r = clober(gl_PointCoord, size);
+    else if(v_render_selection == 7.0f)
+        r = hbar(gl_PointCoord, size);
+    else
+        r = vbar(gl_PointCoord, size);
+
+
+
     float d = abs(r) - t;
     if( r > (v_linewidth/2.0+v_antialias))
     {
@@ -399,6 +419,8 @@ if True:  # Just for the sake of having the parser not globally aviable
            help="Specify the quote char to use in order to parse the csv file")
     parser.add_argument("-e", "--encoding", type=str, default="utf-8",
                     help="Specify the csv files encoding")
+    parser.add_argument("-rm", "--rendermethod", type=int, choices=[0,1,2,3,4,
+            5,6,7,8], help="Specify how to render the nodes.", default=0)
     args = parser.parse_args()
 
 # Parse given csv file
