@@ -100,6 +100,7 @@ class Canvas(app.Canvas):
 
         self.translate = 5
         self.shader_nodes = gloo.Program(vert_nodes, frag_nodes)
+        self.shader_traces = gloo.Program(vert_traces, frag_traces)
         self.program = self.shader_nodes
         self.view = translate((0, 0, -self.translate))
         self.model = numpy.eye(4, dtype=numpy.float32)
@@ -108,12 +109,14 @@ class Canvas(app.Canvas):
         self.apply_zoom()
 
         self.program.bind(gloo.VertexBuffer(data))
-        self.program.bind(gloo.VertexBuffer(trace_data))
+        self.shader_traces.bind(gloo.VertexBuffer(trace_data))
         self.program['u_linewidth'] = u_linewidth
         self.program['u_antialias'] = u_antialias
         self.program['u_render_selection'] = float(args.rendermethod)
         self.program['u_model'] = self.model
         self.program['u_view'] = self.view
+        self.shader_traces['u_model'] = self.model
+        self.shader_traces['u_view'] = self.view
         self.program['u_size'] = 5 / self.translate
 
         self.theta = 0
@@ -137,7 +140,8 @@ class Canvas(app.Canvas):
         self.phi += .5
         self.model = numpy.dot(rotate(self.theta, (0, 0, 1)),
                             rotate(self.phi, (0, 1, 0)))
-        self.program['u_model'] = self.model
+        self.shader_nodes['u_model'] = self.model
+        self.shader_traces['u_model'] = self.model
         self.update()
 
     def on_resize(self, event):
@@ -148,22 +152,25 @@ class Canvas(app.Canvas):
         self.translate = max(2, self.translate)
         self.view = translate((0, 0, -self.translate))
 
-        self.program['u_view'] = self.view
-        self.program['u_size'] = 5 / self.translate
+        self.shader_nodes['u_view'] = self.view
+        self.shader_nodes['u_size'] = 5 / self.translate
+        self.shader_traces['u_view'] = self.view
+        self.shader_traces['u_size'] = 5 / self.translate
         self.update()
 
     def on_draw(self, event):
         gloo.clear()
         self.program = self.shader_nodes
         self.program.draw('points')
-        #self.program = self.shader_traces
-        #self.program.draw('points')
+        self.program = self.shader_traces
+        self.program.draw('lines')
 
     def apply_zoom(self):
         gloo.set_viewport(0, 0, self.physical_size[0], self.physical_size[1])
         self.projection = perspective(45.0, self.size[0] /
                                       float(self.size[1]), 1.0, 1000.0)
-        self.program['u_projection'] = self.projection
+        self.shader_nodes['u_projection'] = self.projection
+        self.shader_traces['u_projection'] = self.projection
 
 # define required shaders
 vert_nodes = """
@@ -360,6 +367,22 @@ void main()
 }
 """
 
+vert_traces = """
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+attribute vec3 a_position;
+void main (void) {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+"""
+
+frag_traces = """
+void main (void) {
+    gl_FragColor = vec4(1,0,0,1);
+}
+"""
+
 #declaring required functions
 def parse_node(row):
     name: str = row[0]
@@ -418,17 +441,16 @@ def compute_connections():
             a = find_node(t)
             if not is_present((n,a)):
                 c.append((n,a))
-    trace_data = numpy.zeros(len(c), [('a_tracesa', numpy.float32, 3),
-                                      ('a_tracesb', numpy.float32, 3)])
+    trace_data = numpy.zeros(len(c) * 2, [('a_position', numpy.float32, 3)])
     for i in range(0, len(c)):
         if args.verbosity > 2:
             print("adding connection [" + str(i) + "]: " + str(c[i]))
-        trace_data['a_tracesb'][0] = c[i][1].position[0]
-        trace_data['a_tracesb'][1] = c[i][1].position[1]
-        trace_data['a_tracesb'][2] = c[i][1].position[2]
-        trace_data['a_tracesa'][0] = c[i][0].position[0]
-        trace_data['a_tracesa'][1] = c[i][0].position[1]
-        trace_data['a_tracesa'][2] = c[i][0].position[2]
+        trace_data['a_position'][i * 2][0]       = c[i][1].position[0]
+        trace_data['a_position'][i * 2][1]       = c[i][1].position[1]
+        trace_data['a_position'][i * 2][2]       = c[i][1].position[2]
+        trace_data['a_position'][(i * 2) + 1][0] = c[i][0].position[0]
+        trace_data['a_position'][(i * 2) + 1][1] = c[i][0].position[1]
+        trace_data['a_position'][(i * 2) + 1][2] = c[i][0].position[2]
     return len(c), trace_data
 
 

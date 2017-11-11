@@ -1,0 +1,5 @@
+Top;3;3;3
+Slave1;1;2;3;Top
+Slave2;2;2;2;Top
+Slave4;1;1.5;1.5;Top
+Slave5;0;2;3;Slave1
