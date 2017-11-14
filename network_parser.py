@@ -115,12 +115,16 @@ class Canvas(app.Canvas):
         self.shader_traces.bind(gloo.VertexBuffer(trace_data))
         self.program['u_linewidth'] = u_linewidth
         self.program['u_antialias'] = u_antialias
+        self.shader_traces['u_linewidth'] = u_linewidth
+        self.shader_traces['u_antialias'] = u_antialias
         self.program['u_render_selection'] = float(args.rendermethod)
         self.program['u_model'] = self.model
         self.program['u_view'] = self.view
         self.shader_traces['u_model'] = self.model
         self.shader_traces['u_view'] = self.view
         self.program['u_size'] = 5 / self.translate
+        self.shader_traces['u_size'] = 5 / self.translate
+        self.shader_traces['u_r'] = 1 - args.thickness
 
         self.theta = 0
         self.phi = 0
@@ -158,7 +162,7 @@ class Canvas(app.Canvas):
         self.shader_nodes['u_view'] = self.view
         self.shader_nodes['u_size'] = 5 / self.translate
         self.shader_traces['u_view'] = self.view
-        #self.shader_traces['u_size'] = 5 / self.translate
+        self.shader_traces['u_size'] = 5 / self.translate
         self.update()
 
     def on_draw(self, event):
@@ -384,15 +388,50 @@ vert_traces = """
 uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
+uniform float u_linewidth;
+uniform float u_antialias;
+uniform float u_size;
+uniform float u_r;
+
 attribute vec3 a_position;
+
+varying float v_linewidth;
+varying float v_antialias;
+varying float v_size;
+varying float v_r;
+
 void main (void) {
+    v_linewidth = u_linewidth;
+    v_antialias = u_antialias;
+    v_size = u_size;
+    v_r = u_r;
     gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+    gl_PointSize = v_size + 2*(v_linewidth + 1.5*v_antialias);
 }
 """
 
 frag_traces = """
+
+varying float v_linewidth;
+varying float v_antialias;
+varying float v_r;
+
 void main (void) {
-    gl_FragColor = vec4(1,0,0,1);
+    float t = v_linewidth/2.0-v_antialias;
+    float d = abs(v_r) - t;
+    if( d < 0.0 )
+    {
+       gl_FragColor = vec4(1,0,0,1);
+    }
+    else
+    {
+        float alpha = d/v_antialias;
+        alpha = exp(-alpha*alpha);
+        if (v_r > 0)
+            gl_FragColor = vec4(vec4(1,0,0,1).rgb, alpha*vec4(0.9).a);
+        else
+            gl_FragColor = mix(vec4(1,1,1,1), vec4(1,0,0,1), alpha);
+    }
 }
 """
 
@@ -474,6 +513,11 @@ global_node_maximum = 0.0
 # Parse command line arguments
 args = None
 if True:  # Just for the sake of having the parser not globally aviable
+    def restricted_float(x):
+        x = float(x)
+        if x < 0.0 or x > 1.0:
+            raise argparse.ArgumentTypeError("%r not in range [0.0, 1.0]"%(x,))
+        return x
     parser = argparse.ArgumentParser(description="Render a network of nodes " +
                                     "specified by a csv file")
     parser.add_argument("inputfile", help="specify the csv file to parse",
@@ -497,6 +541,8 @@ if True:  # Just for the sake of having the parser not globally aviable
             help="Specify an output file")
     parser.add_argument("--resolution", type=int, default=250,
             help="Specify the resolution in dpi")
+    parser.add_argument("--thickness", type=restricted_float, default=0.8,
+            help="Specify the line thickness in [0 .. 1]")
     args = parser.parse_args()
 
 # Parse given csv file
