@@ -36,7 +36,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from vispy import gloo
 from vispy import app
 from vispy import io
+from vispy.util.ptime import time
+from vispy.gloo.util import _screenshot
 from vispy.util.transforms import perspective, translate, rotate
+import matplotlib.pyplot as matplt
 import csv
 import argparse
 import numpy
@@ -159,11 +162,21 @@ class Canvas(app.Canvas):
         self.update()
 
     def on_draw(self, event):
+        if args.outputfile:
+            faces = [ [0, 0], [90, 0], [180, 0], [270, 0], [0, 90], [0, 270] ]
+            self.model = numpy.dot(rotate(faces[args.faces - 1][0], (0, 0, 1)),
+                                rotate(faces[args.faces - 1][0], (0, 1, 0)))
+            self.shader_nodes['u_model'] = self.model
+            self.shader_traces['u_model'] = self.model
         gloo.clear()
         self.program = self.shader_nodes
         self.program.draw('points')
         self.program = self.shader_traces
         self.program.draw('lines')
+        if args.outputfile:
+            self.im = _screenshot((0, 0, self.size[0], self.size[1]))
+            app.quit()
+
 
     def apply_zoom(self):
         gloo.set_viewport(0, 0, self.physical_size[0], self.physical_size[1])
@@ -470,8 +483,8 @@ if True:  # Just for the sake of having the parser not globally aviable
                  help="increase output verbosity", action="count", default=0)
     output_group.add_argument("--quiet", action="store_true",
                  help="Disable entire output of programm")
-    parser.add_argument("-f", "--faces", help="Define how many sides " +
-                    "should be rendered", type=int, choices=[1,2,3,4,5])
+    parser.add_argument("-f", "--faces", default=1, help="Define which side " +
+                    "should be rendered", type=int, choices=[1,2,3,4,5,6])
     parser.add_argument("-d", "--delimiter", type=str, default=";",
            help="Specify the delimiter to use in order to parse the csv file")
     parser.add_argument("-q", "--quotes", type=str, default="|",
@@ -480,6 +493,10 @@ if True:  # Just for the sake of having the parser not globally aviable
                     help="Specify the csv files encoding")
     parser.add_argument("-rm", "--rendermethod", type=int, choices=[0,1,2,3,4,
             5,6,7,8], help="Specify how to render the nodes.", default=0)
+    parser.add_argument("-o", "--outputfile", type=str,
+            help="Specify an output file")
+    parser.add_argument("--resolution", type=int, default=250,
+            help="Specify the resolution in dpi")
     args = parser.parse_args()
 
 # Parse given csv file
@@ -534,3 +551,17 @@ for n in nodes:
 if __name__ == '__main__':
     c = Canvas()
     app.run()
+    if args.outputfile:
+        size = c.size
+        render = c.im
+        if not args.quiet:
+            # print("Finished rendering of data (%.1f ms of GPU time)." % \
+            # (c._time*1e3))
+            pass
+
+        matplt.figure(figsize=(size[0]/100., size[1]/100.), dpi=args.resolution)
+        matplt.xlabel("X-Dimension")
+        matplt.ylabel("Y-Dimension")
+        matplt.imshow(render, interpolation='none')
+        #matplt.show()
+        matplt.savefig(args.outputfile, dpi=args.resolution)

@@ -4,6 +4,7 @@ A tool to 3d render a network from a csv file
 ## PyPy dependancies
  * vispy
  * numpy
+ * matplotlib
 
 ## Python version
 Python >= 3.6 is required.
