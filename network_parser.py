@@ -141,15 +141,30 @@ class Canvas(app.Canvas):
                 self.timer.stop()
             else:
                 self.timer.start()
+        if event.text == 'w':
+            self.theta += 2
+            self.apply_rotation()
+        if event.text == 's':
+            self.theta -= 2
+            self.apply_rotation()
+        if event.text == 'd':
+            self.phi += 2
+            self.apply_rotation()
+        if event.text == 'a':
+            self.phi -= 2
+            self.apply_rotation()
 
-    def on_timer(self, event):
-        self.theta += .5
-        self.phi += .5
+    def apply_rotation(self):
         self.model = numpy.dot(rotate(self.theta, (0, 0, 1)),
                             rotate(self.phi, (0, 1, 0)))
         self.shader_nodes['u_model'] = self.model
         self.shader_traces['u_model'] = self.model
         self.update()
+
+    def on_timer(self, event):
+        self.theta += .5
+        self.phi += .5
+        self.apply_rotation()
 
     def on_resize(self, event):
         self.apply_zoom()
